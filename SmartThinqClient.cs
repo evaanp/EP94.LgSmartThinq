@@ -32,8 +32,7 @@ namespace EP94.LgSmartThinq
             DeviceClient deviceClient = null;
             switch (device.DeviceType)
             {
-                // ac
-                case 401:
+                case DeviceType.AC:
                     deviceClient = new AcClient(_passport, _gateway.Thinq2Uri, device.DeviceId);
                     break;
             }

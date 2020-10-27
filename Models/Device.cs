@@ -11,7 +11,7 @@ namespace EP94.LgSmartThinq.Models
         public string ModelCountryCode { get; set; }
         public string CountryCode { get; set; }
         public string ModelName { get; set; }
-        public int DeviceType { get; set; }
+        public DeviceType DeviceType { get; set; }
         public string DeviceCode { get; set; }
         public string Alias { get; set; }
         public string DeviceId { get; set; }
