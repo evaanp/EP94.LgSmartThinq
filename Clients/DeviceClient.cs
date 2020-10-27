@@ -12,7 +12,7 @@ namespace EP94.LgSmartThinq.Clients
     public abstract class DeviceClient : ThinqApiClient
     {
         private string _deviceId;
-        protected DeviceClient(Passport passport, string baseUrl, string deviceId) : base(passport, baseUrl)
+        protected DeviceClient(Passport passport, string baseUrl, string deviceId, OAuthClient oAuthClient) : base(passport, baseUrl, oAuthClient)
         {
             _deviceId = deviceId;
         }

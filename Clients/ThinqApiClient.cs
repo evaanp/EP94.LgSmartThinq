@@ -15,10 +15,12 @@ namespace EP94.LgSmartThinq.Clients
     {
         private string _baseUrl { get; }
         private Passport _passport;
-        public ThinqApiClient(Passport passport, string baseUrl)
+        private OAuthClient _oAuthClient;
+        public ThinqApiClient(Passport passport, string baseUrl, OAuthClient oAuthClient)
         {
             _passport = passport;
             _baseUrl = baseUrl;
+            _oAuthClient = oAuthClient;
         }
 
         protected HttpRequestMessage GetHttpRequestMessage(HttpMethod httpMethod, string relativeUrl)
@@ -50,7 +52,12 @@ namespace EP94.LgSmartThinq.Clients
             using HttpResponseMessage response = await httpClient.SendAsync(httpRequestMessage);
             string responseString = await response.Content.ReadAsStringAsync();
             JObject jObject = JsonConvert.DeserializeObject<JObject>(responseString);
-            return jObject["resultCode"].Value<int>() == ErrorCodes.OK;
+            int resultCode = jObject["resultCode"].Value<int>();
+
+            if (resultCode == ErrorCodes.EMP_AUTHENTICATION_FAILED)
+                resultCode = (await ReAuthenticateAndReExecuteRequest(httpRequestMessage))["resultCode"].Value<int>();
+
+            return resultCode == ErrorCodes.OK;
         }
 
         protected async Task<T> ExecuteRequest<T>(HttpRequestMessage httpRequestMessage, string path = null)
@@ -59,6 +66,11 @@ namespace EP94.LgSmartThinq.Clients
             using HttpResponseMessage response = await httpClient.SendAsync(httpRequestMessage);
             string responseString = await response.Content.ReadAsStringAsync();
             JObject jObject = JsonConvert.DeserializeObject<JObject>(responseString);
+            int resultCode = jObject["resultCode"].Value<int>();
+
+            if (resultCode == ErrorCodes.EMP_AUTHENTICATION_FAILED)
+                jObject = await ReAuthenticateAndReExecuteRequest(httpRequestMessage);
+
             if (jObject["resultCode"].Value<int>() == ErrorCodes.OK)
             {
                 if (path == null)
@@ -75,6 +87,21 @@ namespace EP94.LgSmartThinq.Clients
             }
             else
                 return default;
+        }
+
+        private async Task<JObject> ReAuthenticateAndReExecuteRequest(HttpRequestMessage httpRequestMessage)
+        {
+            httpRequestMessage = httpRequestMessage.Clone();
+            using HttpClient httpClient = new HttpClient();
+            await _oAuthClient.RefreshOAuthToken(_passport);
+            var headers = httpRequestMessage.Headers;
+            if (headers.Contains("x-emp-token")) headers.Remove("x-emp-token");
+            if (headers.Contains("Authorization")) headers.Remove("Authorization");
+            headers.Add("x-emp-token", _passport.Token.AccessToken);
+            headers.Add("Authorization", $"Bearer {_passport.Token.AccessToken}");
+            using HttpResponseMessage response = await httpClient.SendAsync(httpRequestMessage);
+            string responseString = await response.Content.ReadAsStringAsync();
+            return JsonConvert.DeserializeObject<JObject>(responseString);
         }
     }
 }

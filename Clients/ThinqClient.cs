@@ -11,7 +11,7 @@ namespace EP94.LgSmartThinq.Clients
 {
     internal class ThinqClient : ThinqApiClient
     {
-        public ThinqClient(Passport passport, string baseUrl) : base(passport, baseUrl) { }
+        public ThinqClient(Passport passport, string baseUrl, OAuthClient oAuthClient) : base(passport, baseUrl, oAuthClient) { }
 
         public async Task<List<Device>> GetDevices()
         {

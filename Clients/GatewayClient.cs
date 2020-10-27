@@ -11,11 +11,10 @@ namespace EP94.LgSmartThinq.Clients
 {
     internal class GatewayClient : ThinqApiClient
     {
-        public GatewayClient(Passport passport) : base(passport, "https://route.lgthinq.com:46030/v1") { }
+        public GatewayClient(Passport passport, OAuthClient oAuthClient) : base(passport, "https://route.lgthinq.com:46030/v1", oAuthClient) { }
 
         public async Task<Gateway> GetGateway()
         {
-            HttpClient client = new HttpClient();
             var httpRequestMessage = GetHttpRequestMessage(HttpMethod.Get, "/service/application/gateway-uri");
             return await ExecuteRequest<Gateway>(httpRequestMessage);
         }

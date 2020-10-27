@@ -8,7 +8,7 @@ namespace EP94.LgSmartThinq.Clients
 {
     public class AcClient : DeviceClient
     {
-        internal AcClient(Passport passport, string baseUrl, string deviceId) : base(passport, baseUrl, deviceId)
+        internal AcClient(Passport passport, string baseUrl, string deviceId, OAuthClient oAuthClient) : base(passport, baseUrl, deviceId, oAuthClient)
         {
         }
 
@@ -20,5 +20,6 @@ namespace EP94.LgSmartThinq.Clients
         public async Task<bool> SetTemperatureSetpoint(double setpoint) => await SendCommand("Set", "airState.tempState.target", setpoint);
         public async Task<bool> SetFanSpeed(FanSpeed speed) => await SendCommand("Set", "airState.windStrength", (int)speed);
         public async Task<double> GetMeasuredTemperature() => (await GetDeviceSnapshot()).AirStatetempStatecurrent;
+        public async Task<Snapshot> GetSnapshot() => await GetDeviceSnapshot();
     }
 }

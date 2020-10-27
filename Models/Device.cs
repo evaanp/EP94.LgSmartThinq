@@ -118,7 +118,7 @@ namespace EP94.LgSmartThinq.Models
         public Meta Meta { get; set; }
         public bool Online { get; set; }
         [JsonProperty("airState.opMode")]
-        public float AirStateopMode { get; set; }
+        public int AirStateopMode { get; set; }
         [JsonProperty("airState.reservation.targetTimeToStop")]
         public float AirStatereservationtargetTimeToStop { get; set; }
         [JsonProperty("airState.filterMngStates.maxTime")]

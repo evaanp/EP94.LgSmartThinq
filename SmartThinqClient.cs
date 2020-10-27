@@ -13,17 +13,17 @@ namespace EP94.LgSmartThinq
         private Passport _passport;
         private Gateway _gateway;
 
-        public async Task Initialize(string username, string password, string country, string languageCode)
+        public async Task Initialize(string username, string password, string country, string languageCode, string chromiumPath = null)
         {
-            _oAuthClient = new OAuthClient(username, password, country, languageCode);
+            _oAuthClient = new OAuthClient(username, password, country, languageCode, chromiumPath);
             _passport = await _oAuthClient.GetPassport();
-            GatewayClient gatewayClient = new GatewayClient(_passport);
+            GatewayClient gatewayClient = new GatewayClient(_passport, _oAuthClient);
             _gateway = await gatewayClient.GetGateway();
         }
 
         public async Task<List<Device>> GetDevices()
         {
-            ThinqClient thinqClient = new ThinqClient(_passport, _gateway.Thinq2Uri);
+            ThinqClient thinqClient = new ThinqClient(_passport, _gateway.Thinq2Uri, _oAuthClient);
             return await thinqClient.GetDevices();
         }
 
@@ -33,7 +33,7 @@ namespace EP94.LgSmartThinq
             switch (device.DeviceType)
             {
                 case DeviceType.AC:
-                    deviceClient = new AcClient(_passport, _gateway.Thinq2Uri, device.DeviceId);
+                    deviceClient = new AcClient(_passport, _gateway.Thinq2Uri, device.DeviceId, _oAuthClient);
                     break;
             }
             return deviceClient;

@@ -17,18 +17,20 @@ using System.Web;
 
 namespace EP94.LgSmartThinq.Clients
 {
-    internal class OAuthClient
+    public class OAuthClient
     {
         private string _username;
         private string _password;
         private string _country;
         private string _languageCode;
-        public OAuthClient(string username, string password, string country, string languageCode)
+        private string _chromiumPath;
+        public OAuthClient(string username, string password, string country, string languageCode, string chromiumPath = null)
         {
             _username = username;
             _password = password;
             _country = country;
             _languageCode = languageCode;
+            _chromiumPath = chromiumPath;
         }
 
         public async Task<Passport> GetPassport()
@@ -100,10 +102,14 @@ namespace EP94.LgSmartThinq.Clients
                 Console.WriteLine("Downloading browser revision...");
                 await browserFetcher.DownloadAsync(BrowserFetcher.DefaultRevision);
             }
-            Browser browser = await Puppeteer.LaunchAsync(new LaunchOptions()
+            LaunchOptions launchOptions = new LaunchOptions()
             {
-                Headless = true
-            });
+                Headless = true,
+                Args = new string[] { "--no-sandbox" }
+            };
+            if (_chromiumPath != null)
+                launchOptions.ExecutablePath = _chromiumPath;
+            Browser browser = await Puppeteer.LaunchAsync(launchOptions);
             Page page = await browser.NewPageAsync();
             await page.GoToAsync(loginUrl);
             ElementHandle emailIdInput = await page.WaitForSelectorAsync("#user_id");
