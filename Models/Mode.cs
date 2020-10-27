@@ -6,9 +6,10 @@ namespace EP94.LgSmartThinq.Models
 {
     public enum Mode
     {
-        UNKNOWN1 = 1,
-        Swing = 2,
-        UNKNOWN3 = 3,
-        UNKNOWN4 = 4
+        Cool = 0,
+        Dry = 1,
+        Fan = 2,
+        Heat = 4,
+        Auto = 6
     }
 }

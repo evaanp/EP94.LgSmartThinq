@@ -6,10 +6,9 @@ namespace EP94.LgSmartThinq.Models
 {
     public enum FanSpeed
     {
-        Speed1 = 2,
-        Speed2 = 4,
-        Speed3 = 6,
-        Speed4 = 8,
-        Speed5 = 10
+        Low = 2,
+        Mid = 4,
+        High = 6,
+        Auto = 8
     }
 }
