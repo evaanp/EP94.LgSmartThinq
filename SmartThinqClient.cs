@@ -9,13 +9,14 @@ namespace EP94.LgSmartThinq
 {
     public class SmartThinqClient
     {
+        private OAuthClient _oAuthClient;
         private Passport _passport;
         private Gateway _gateway;
 
         public async Task Initialize(string username, string password, string country, string languageCode)
         {
-            OAuthClient oAuthClient = new OAuthClient(username, password, country, languageCode);
-            _passport = await oAuthClient.GetPassport();
+            _oAuthClient = new OAuthClient(username, password, country, languageCode);
+            _passport = await _oAuthClient.GetPassport();
             GatewayClient gatewayClient = new GatewayClient(_passport);
             _gateway = await gatewayClient.GetGateway();
         }
@@ -28,13 +29,15 @@ namespace EP94.LgSmartThinq
 
         public DeviceClient GetDeviceClient(Device device)
         {
+            DeviceClient deviceClient = null;
             switch (device.DeviceType)
             {
                 // ac
                 case 401:
-                    return new AcClient(_passport, _gateway.Thinq2Uri, device.DeviceId);
+                    deviceClient = new AcClient(_passport, _gateway.Thinq2Uri, device.DeviceId);
+                    break;
             }
-            return null;
+            return deviceClient;
         }
     }
 }

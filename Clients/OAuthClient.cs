@@ -5,7 +5,9 @@ using PuppeteerSharp;
 using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
+using System.Diagnostics;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Security.Cryptography;
@@ -31,29 +33,63 @@ namespace EP94.LgSmartThinq.Clients
 
         public async Task<Passport> GetPassport()
         {
-            string loginCode = await GetLoginCode();
-            OAuthToken oAuthToken = await GetOAuthToken(loginCode);
-            UserProfile userProfile = await GetUserProfile(oAuthToken);
-            return new Passport()
+            string passportPath = 
+                Path.Combine(
+                    Path.GetDirectoryName(Process.GetCurrentProcess().MainModule.FileName), string.Concat(nameof(Passport), ".json"));
+            Passport passport = null;
+            if (File.Exists(passportPath))
             {
-                Token = oAuthToken,
-                UserProfile = userProfile,
-                Country = _country,
-                Language = _languageCode
-            };
+                passport = JsonConvert.DeserializeObject<Passport>(File.ReadAllText(passportPath));
+                await RefreshOAuthToken(passport);
+            }
+            else
+            {
+                string loginCode = await GetLoginCode();
+                OAuthToken oAuthToken = await GetOAuthToken(loginCode);
+                UserProfile userProfile = await GetUserProfile(oAuthToken);
+                passport = new Passport()
+                {
+                    Token = oAuthToken,
+                    UserProfile = userProfile,
+                    Country = _country,
+                    Language = _languageCode
+                };
+            }
+            File.WriteAllText(passportPath, JsonConvert.SerializeObject(passport));
+            return passport;
+        }
+
+        public async Task RefreshOAuthToken(Passport passport)
+        {
+            HttpClient client = new HttpClient();
+            Dictionary<string, string> queryParams = new Dictionary<string, string>();
+            queryParams.Add("grant_type", "refresh_token");
+            queryParams.Add("refresh_token", passport.Token.RefreshToken);
+            FormUrlEncodedContent formUrlEncoded = new FormUrlEncodedContent(queryParams);
+            string urlEncodedString = formUrlEncoded.ReadAsStringAsync().Result;
+            string relativeUrl = $"/oauth/1.0/oauth2/token?{urlEncodedString}";
+            string fullUrl = $"{Constants.API_BASE_URL}{relativeUrl}";
+
+            using var requestMessage = GetOAuthRequestMessage(fullUrl, relativeUrl, formUrlEncoded, HttpMethod.Post, true);
+            var response = await client.SendAsync(requestMessage);
+            string stringResponse = await response.Content.ReadAsStringAsync();
+            OAuthToken newToken = JsonConvert.DeserializeObject<OAuthToken>(await response.Content.ReadAsStringAsync());
+            passport.Token.AccessToken = newToken.AccessToken;
         }
 
         private async Task<string> GetLoginCode()
         {
-            Dictionary<string, string> queryParams = new Dictionary<string, string>();
-            queryParams.Add("country", _country);
-            queryParams.Add("language", _languageCode);
-            queryParams.Add("svc_list", Constants.SERVICE_CODE);
-            queryParams.Add("client_id", Constants.LGE_APP_KEY);
-            queryParams.Add("division", Constants.DIVISION);
-            queryParams.Add("redirect_uri", Constants.OAUTH_REDIRECT_URI);
-            queryParams.Add("state", "asdfasdf");
-            queryParams.Add("show_thirdparty_login", Constants.THIRD_PARTY_LOGINS);
+            Dictionary<string, string> queryParams = new Dictionary<string, string>
+            {
+                { "country", _country },
+                { "language", _languageCode },
+                { "svc_list", Constants.SERVICE_CODE },
+                { "client_id", Constants.LGE_APP_KEY },
+                { "division", Constants.DIVISION },
+                { "redirect_uri", Constants.OAUTH_REDIRECT_URI },
+                { "state", "asdfasdf" },
+                { "show_thirdparty_login", Constants.THIRD_PARTY_LOGINS }
+            };
             FormUrlEncodedContent formUrlEncoded = new FormUrlEncodedContent(queryParams);
             string urlEncodedString = formUrlEncoded.ReadAsStringAsync().Result;
             string loginUrl = $"{string.Format(Constants.LOGIN_BASE_URL, _country)}/spx/login/signIn?{urlEncodedString}";
@@ -114,9 +150,11 @@ namespace EP94.LgSmartThinq.Clients
             var response = await client.SendAsync(requestMessage);
             string responseString = await response.Content.ReadAsStringAsync();
             var jsonObject = JsonConvert.DeserializeObject<dynamic>(responseString);
-            UserProfile userProfile = new UserProfile();
-            userProfile.UserNo = (string)jsonObject["account"]["userNo"];
-            userProfile.UserId = (string)jsonObject["account"]["userID"];
+            UserProfile userProfile = new UserProfile
+            {
+                UserNo = (string)jsonObject["account"]["userNo"],
+                UserId = (string)jsonObject["account"]["userID"]
+            };
             return userProfile;
         }
 
