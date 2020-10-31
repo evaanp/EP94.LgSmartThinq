@@ -14,8 +14,8 @@ namespace EP94.LgSmartThinq.Clients
     public abstract class ThinqApiClient
     {
         private string _baseUrl { get; }
-        private Passport _passport;
-        private OAuthClient _oAuthClient;
+        protected Passport _passport;
+        protected OAuthClient _oAuthClient;
         public ThinqApiClient(Passport passport, string baseUrl, OAuthClient oAuthClient)
         {
             _passport = passport;
