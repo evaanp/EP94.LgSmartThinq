@@ -1,5 +1,6 @@
 ﻿using EP94.LgSmartThinq.Clients;
 using EP94.LgSmartThinq.Models;
+using EP94.LgSmartThinq.Utils;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -12,6 +13,7 @@ namespace EP94.LgSmartThinq
         private OAuthClient _oAuthClient;
         private Passport _passport;
         private Gateway _gateway;
+        private ThinqClient _thinqClient;
 
         public async Task Initialize(string username, string password, string country, string languageCode, string chromiumPath = null)
         {
@@ -19,12 +21,12 @@ namespace EP94.LgSmartThinq
             _passport = await _oAuthClient.GetPassport();
             GatewayClient gatewayClient = new GatewayClient(_passport, _oAuthClient);
             _gateway = await gatewayClient.GetGateway();
+            _thinqClient = new ThinqClient(_passport, _gateway.Thinq2Uri, _oAuthClient);
         }
 
         public async Task<List<Device>> GetDevices()
         {
-            ThinqClient thinqClient = new ThinqClient(_passport, _gateway.Thinq2Uri, _oAuthClient);
-            return await thinqClient.GetDevices();
+            return await _thinqClient.GetDevices();
         }
 
         public DeviceClient GetDeviceClient(Device device)
@@ -37,6 +39,14 @@ namespace EP94.LgSmartThinq
                     break;
             }
             return deviceClient;
+        }
+
+        public async Task<ThinqMqttClient> GetMqttClient()
+        {
+            CommonClient commonClient = new CommonClient(_passport, Constants.COMMON_BASE_URL, _oAuthClient);
+            RouteResponse route = await commonClient.GetRoute();
+            ThinqMqttClient mqttClient = new ThinqMqttClient(route.MqttServer, _thinqClient);
+            return mqttClient;
         }
     }
 }

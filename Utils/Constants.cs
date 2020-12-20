@@ -26,5 +26,6 @@ namespace EP94.LgSmartThinq.Utils
         //public static string API_BASE_URL = "https://route.lgthinq.com:46030/v1/";
         public static string LOGIN_BASE_URL = "https://{0}.m.lgaccount.com";
         public static string API_BASE_URL = "https://gb.lgeapi.com";
+        public static string COMMON_BASE_URL = "https://common.lgthinq.com";  
     }
 }

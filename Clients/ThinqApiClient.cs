@@ -89,6 +89,15 @@ namespace EP94.LgSmartThinq.Clients
                 return default;
         }
 
+        protected async Task<int> ExecuteRequestResultCode(HttpRequestMessage httpRequestMessage)
+        {
+            using HttpClient httpClient = new HttpClient();
+            using HttpResponseMessage response = await httpClient.SendAsync(httpRequestMessage);
+            string responseString = await response.Content.ReadAsStringAsync();
+            JObject jObject = JsonConvert.DeserializeObject<JObject>(responseString);
+            return jObject["resultCode"].Value<int>();
+        }
+
         private async Task<JObject> ReAuthenticateAndReExecuteRequest(HttpRequestMessage httpRequestMessage)
         {
             httpRequestMessage = httpRequestMessage.Clone();

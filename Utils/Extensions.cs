@@ -42,5 +42,10 @@ namespace EP94.LgSmartThinq.Utils
             }
             return clone;
         }
+
+        public static int ToUnixTimestamp(this DateTime dateTime)
+        {
+            return (int)(dateTime.Subtract(new DateTime(1970, 1, 1))).TotalSeconds;
+        }
     }
 }
