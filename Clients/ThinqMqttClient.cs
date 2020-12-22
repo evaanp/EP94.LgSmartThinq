@@ -26,25 +26,27 @@ using System.Threading.Tasks;
 
 namespace EP94.LgSmartThinq.Clients
 {
+    public delegate void NewDataHandler(Snapshot data);
+    public delegate void ErrorHandler(Exception exception);
     public class ThinqMqttClient
     {
+        public event NewDataHandler OnNewData;
+        public event ErrorHandler OnError;
+        public bool Connected = false;
         private Uri _brokerUri;
         private ThinqClient _thinqClient;
-        private IMqttClient _client;
         private List<string> _subscriptions;
 
         internal ThinqMqttClient(string brokerAddress, ThinqClient thinqClient)
         {
             _brokerUri = new Uri(brokerAddress);
             _thinqClient = thinqClient;
-            MqttNetConsoleLogger.ForwardToConsole();
         }
 
-        public async Task Connect()
+        public async Task Connect(bool autoReconnect = true)
         {
             try
             {
-                X509Certificate2 iotCertificate = new X509Certificate2(Encoding.UTF8.GetBytes(await GetIotCertificate()));
                 IotCertificateRegisterResponse registerResponse = await _thinqClient.RegisterIotCertificate(X509CertificateHelpers.CreateCsr(out AsymmetricCipherKeyPair keyPair));
                 X509Certificate2 certificate = registerResponse.CertificatePem;
                 RSA rsa = DotNetUtilities.ToRSA((RsaPrivateCrtKeyParameters)keyPair.Private);
@@ -52,20 +54,19 @@ namespace EP94.LgSmartThinq.Clients
                 _subscriptions = registerResponse.Subscriptions;
 
                 var factory = new MqttFactory();
-                _client = factory.CreateMqttClient();
+                using IMqttClient client = factory.CreateMqttClient();
                 var clientOptions = new MqttClientOptions
                 {
                     ChannelOptions = new MqttClientTcpOptions
                     {
                         Server = _brokerUri.Host,
                         Port = _brokerUri.Port,
-                        
                         TlsOptions = new MqttClientTlsOptions()
                         {
                             UseTls = true,
                             AllowUntrustedCertificates = true,
-                            
-                            Certificates = new List<X509Certificate>() { certWithPrivateKey, iotCertificate },
+
+                            Certificates = new List<X509Certificate>() { certWithPrivateKey },
                             CertificateValidationHandler = (c) =>
                             {
                                 return true;
@@ -75,48 +76,31 @@ namespace EP94.LgSmartThinq.Clients
                     },
                     ClientId = Constants.CLIENT_ID
                 };
-                _client.ApplicationMessageReceivedHandler = new MqttApplicationMessageReceivedHandlerDelegate(e =>
+                client.ApplicationMessageReceivedHandler = new MqttApplicationMessageReceivedHandlerDelegate(e =>
                 {
                     string payload = Encoding.UTF8.GetString(e.ApplicationMessage.Payload);
-
-                    Console.WriteLine("### RECEIVED APPLICATION MESSAGE ###");
-                    Console.WriteLine($"+ Topic = {e.ApplicationMessage.Topic}");
-                    Console.WriteLine($"+ Payload = {payload}");
-                    Console.WriteLine($"+ QoS = {e.ApplicationMessage.QualityOfServiceLevel}");
-                    Console.WriteLine($"+ Retain = {e.ApplicationMessage.Retain}");
-                    Console.WriteLine();
+                    JObject jObject = JsonConvert.DeserializeObject(payload) as JObject;
+                    Snapshot snapshot = jObject["data"]["state"]["reported"].ToObject<Snapshot>();
+                    OnNewData?.Invoke(snapshot);
                 });
-                _client.ConnectedHandler = new MqttClientConnectedHandlerDelegate(async e =>
+                client.ConnectedHandler = new MqttClientConnectedHandlerDelegate(async e =>
                 {
+                    Connected = true;
                     foreach (var subscription in registerResponse.Subscriptions)
-                        await _client.SubscribeAsync(new MqttTopicFilter() { Topic = subscription });
+                        await client.SubscribeAsync(new MqttTopicFilter() { Topic = subscription });
                 });
-                _client.DisconnectedHandler = new MqttClientDisconnectedHandlerDelegate(async e =>
+                client.DisconnectedHandler = new MqttClientDisconnectedHandlerDelegate(async e =>
                 {
-                    Console.WriteLine("### DISCONNECTED FROM SERVER ###");
-                    var result = await _client.ConnectAsync(clientOptions);
+                    Connected = false;
+                    if (autoReconnect)
+                        await client.ConnectAsync(clientOptions);
                 });
-                
-                try
-                {
-                    var result = await _client.ConnectAsync(clientOptions);
-                }
-                catch (Exception exception)
-                {
-                    Console.WriteLine("### CONNECTING FAILED ###" + Environment.NewLine + exception);
-                }
+                await client.ConnectAsync(clientOptions);
             }
             catch (Exception e)
             {
-                Console.WriteLine(e);
+                OnError?.Invoke(e);
             }
-        }
-
-        private async Task<string> GetIotCertificate()
-        {
-            using HttpClient httpClient = new HttpClient();
-            HttpResponseMessage response = await httpClient.GetAsync(Constants.AWS_IOTT_CA_CERT_URL);
-            return await response.Content.ReadAsStringAsync();
         }
     }
 }
