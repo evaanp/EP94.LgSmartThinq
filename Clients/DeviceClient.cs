@@ -14,7 +14,7 @@ namespace EP94.LgSmartThinq.Clients
 {
     public abstract class DeviceClient : ThinqApiClient
     {
-        private Snapshot _snapshot = new Snapshot();
+        private Snapshot _snapshot;
         private Device _device;
         private ThinqClient _thinqClient;
         private IMapper _objectMapper;
