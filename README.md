@@ -9,18 +9,18 @@
  };
  SmartThinqClient smartThinqClient = new SmartThinqClient();
  smartThinqClient.OnInitializationSuccessful += async () =>
-   {
-       List<Device> devices = await smartThinqClient.GetDevices();
-       Device device = devices.First();
-       var client = smartThinqClient.GetDeviceClient(device) as AcClient;
+ {
+     List<Device> devices = await smartThinqClient.GetDevices();
+     Device device = devices.First();
+     var client = smartThinqClient.GetDeviceClient(device) as AcClient;
 
-       Snapshot desired = new Snapshot()
-       {
-           IsOn = true,
-           TargetTemperature = 25
-       };
-       bool success = await client.SetSnapshot(desired);
-       Console.WriteLine("Success: " + success);
-   };
+     Snapshot desired = new Snapshot()
+     {
+         IsOn = true,
+         TargetTemperature = 25
+     };
+     bool success = await client.SetSnapshot(desired);
+     Console.WriteLine("Success: " + success);
+ };
  await smartThinqClient.Initialize("name@email.com", "password", "US", "en-US");
 ```
