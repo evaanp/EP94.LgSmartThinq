@@ -3,15 +3,24 @@
  
  Usage:
  ```c#
- SmartThinqClient smartThinqClient = new SmartThinqClient();
- await smartThinqClient.Initialize("name@email.com", "password", "US", "en-US");
- List<Device> devices = await smartThinqClient.GetDevices();
- AcClient acClient = smartThinqClient.GetDeviceClient(devices.First()) as AcClient;
- await acClient.TurnOnAc();
- var mqttClient = await smartThinqClient.GetMqttClient();
- await mqttClient.Connect();
- mqttClient.OnNewData += (snapshot) =>
+ SmartThinqLogger.OnNewLogMessage += (message, logLevel, args) =>
  {
-     //...
+     Console.WriteLine(message, args);
  };
+ SmartThinqClient smartThinqClient = new SmartThinqClient();
+ smartThinqClient.OnInitializationSuccessful += async () =>
+   {
+       List<Device> devices = await smartThinqClient.GetDevices();
+       Device device = devices.First();
+       var client = smartThinqClient.GetDeviceClient(device) as AcClient;
+
+       Snapshot desired = new Snapshot()
+       {
+           IsOn = true,
+           TargetTemperature = 25
+       };
+       bool success = await client.SetSnapshot(desired);
+       Console.WriteLine("Success: " + success);
+   };
+ await smartThinqClient.Initialize("name@email.com", "password", "US", "en-US");
 ```
