@@ -14,7 +14,7 @@ namespace EP94.LgSmartThinq.Clients
 {
     public abstract class DeviceClient : ThinqApiClient
     {
-        private Snapshot _snapshot;
+        private Snapshot _snapshot = new Snapshot();
         private Device _device;
         private ThinqClient _thinqClient;
         private IMapper _objectMapper;
@@ -32,8 +32,7 @@ namespace EP94.LgSmartThinq.Clients
 
         private static Dictionary<Type, Type> _typeConversions = new Dictionary<Type, Type>()
         {
-            {  typeof(bool), typeof(int) },
-            //{  typeof(bool), typeof(int) },
+            {  typeof(bool), typeof(int) }
         };
         public async Task<bool> SetSnapshot(Snapshot desiredSnapshot)
         {
@@ -88,7 +87,7 @@ namespace EP94.LgSmartThinq.Clients
             });
             mqttClient.OnConnectionStatusChange += (connected) =>
             {
-                if (!connected)
+                if (!connected && _snapshot != null)
                     _snapshot.LastUpdated = DateTime.MinValue;
             };
             _ = mqttClient.Connect(true);
