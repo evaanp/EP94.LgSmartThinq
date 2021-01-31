@@ -71,60 +71,73 @@ namespace EP94.LgSmartThinq.Models
         public bool InitDevice { get; set; }
         public string ExistsEntryPopup { get; set; }
         public int? Tclcount { get; set; }
+
+        public override string ToString()
+        {
+            return DeviceId;
+        }
     }
     public class Snapshot
     {
+        [JsonIgnore]
+        public DateTime LastUpdated { get; set; } = DateTime.UtcNow;
+
         [JsonProperty("airState.windStrength")]
-        public float? AirStatewindStrength { get; set; }
+        public float? FanSpeed { get; set; }
         [JsonProperty("airState.wMode.lowHeating")]
-        public float? AirStatewModelowHeating { get; set; }
+        public float? ModeLowHeating { get; set; }
         [JsonProperty("airState.diagCode")]
-        public float? AirStatediagCode { get; set; }
+        public float? DiagCode { get; set; }
         [JsonProperty("airState.lightingState.displayControl")]
-        public float? AirStatelightingStatedisplayControl { get; set; }
+        public float? LightingStateDisplayControl { get; set; }
         [JsonProperty("airState.wDir.hStep")]
-        public float? AirStatewDirhStep { get; set; }
+        public float? HorizontalStep { get; set; }
         [JsonProperty("mid")]
         public float? Mid { get; set; }
         [JsonProperty("airState.energy.onCurrent")]
-        public float? AirStateenergyonCurrent { get; set; }
+        public float? CurrentEnergy { get; set; }
         [JsonProperty("airState.wMode.airClean")]
-        public float? AirStatewModeairClean { get; set; }
+        public bool? ModeAirClean { get; set; }
         [JsonProperty("airState.quality.sensorMon")]
-        public float? AirStatequalitysensorMon { get; set; }
+        public float? SensorMon { get; set; }
         [JsonProperty("airState.tempState.target")]
-        public float? AirStatetempStatetarget { get; set; }
+        public int? TargetTemperature { get; set; }
         [JsonProperty("airState.operation")]
-        public float? AirStateoperation { get; set; }
+        public bool? IsOn { get; set; }
         [JsonProperty("airState.wMode.jet")]
-        public float? AirStatewModejet { get; set; }
+        public bool? JetMode { get; set; }
         [JsonProperty("airState.wDir.vStep")]
-        public float? AirStatewDirvStep { get; set; }
+        public float? VerticalStep { get; set; }
         [JsonProperty("timestamp")]
         public float? Timestamp { get; set; }
         [JsonProperty("airState.powerSave.basic")]
-        public float? AirStatepowerSavebasic { get; set; }
+        public float? PowersafeBasic { get; set; }
         public Static Static { get; set; }
         [JsonProperty("airState.tempState.current")]
-        public float? AirStatetempStatecurrent { get; set; }
+        public float? MeasuredTemperature { get; set; }
         [JsonProperty("airState.miscFuncState.extraOp")]
-        public float? AirStatemiscFuncStateextraOp { get; set; }
+        public float? ExtraOp { get; set; }
         [JsonProperty("airState.reservation.sleepTime")]
-        public float? AirStatereservationsleepTime { get; set; }
+        public float? SleepTime { get; set; }
         [JsonProperty("airState.miscFuncState.autoDry")]
-        public float? AirStatemiscFuncStateautoDry { get; set; }
+        public bool? AutoDry { get; set; }
         [JsonProperty("airState.reservation.targetTimeToStart")]
-        public float? AirStatereservationtargetTimeToStart { get; set; }
+        public float? TargetTimeToStart { get; set; }
         public Meta Meta { get; set; }
-        public bool Online { get; set; }
+        public bool? Online { get; set; }
         [JsonProperty("airState.opMode")]
-        public int? AirStateopMode { get; set; }
+        public int? OperationMode { get; set; }
         [JsonProperty("airState.reservation.targetTimeToStop")]
-        public float? AirStatereservationtargetTimeToStop { get; set; }
+        public float? TargetTimeToStop { get; set; }
         [JsonProperty("airState.filterMngStates.maxTime")]
-        public float? AirStatefilterMngStatesmaxTime { get; set; }
+        public float? FilterMaxTime { get; set; }
         [JsonProperty("airState.filterMngStates.useTime")]
-        public float? AirStatefilterMngStatesuseTime { get; set; }
+        public float? FilterUseTime { get; set; }
+
+        public override string ToString()
+        {
+            return JsonConvert.SerializeObject(this);
+        }
     }
 
     public class Static

@@ -41,12 +41,18 @@ namespace EP94.LgSmartThinq.Clients
             Passport passport = null;
             if (File.Exists(passportPath))
             {
+                SmartThinqLogger.Log("Passport found on path {0}", LogLevel.Debug, passportPath);
                 passport = JsonConvert.DeserializeObject<Passport>(File.ReadAllText(passportPath));
                 await RefreshOAuthToken(passport);
             }
             else
             {
+                SmartThinqLogger.Log("Passport not found, creating new", LogLevel.Debug);
                 string loginCode = await GetLoginCode();
+                if (loginCode == null)
+                {
+                    return null;
+                }
                 OAuthToken oAuthToken = await GetOAuthToken(loginCode);
                 UserProfile userProfile = await GetUserProfile(oAuthToken);
                 passport = new Passport()
@@ -58,11 +64,13 @@ namespace EP94.LgSmartThinq.Clients
                 };
             }
             File.WriteAllText(passportPath, JsonConvert.SerializeObject(passport));
+            SmartThinqLogger.Log("Wrote passport to file {0}", LogLevel.Debug, passportPath);
             return passport;
         }
 
         public async Task RefreshOAuthToken(Passport passport)
         {
+            SmartThinqLogger.Log("Refreshing OAuth token", LogLevel.Debug);
             HttpClient client = new HttpClient();
             Dictionary<string, string> queryParams = new Dictionary<string, string>();
             queryParams.Add("grant_type", "refresh_token");
@@ -77,10 +85,13 @@ namespace EP94.LgSmartThinq.Clients
             string stringResponse = await response.Content.ReadAsStringAsync();
             OAuthToken newToken = JsonConvert.DeserializeObject<OAuthToken>(await response.Content.ReadAsStringAsync());
             passport.Token.AccessToken = newToken.AccessToken;
+            SmartThinqLogger.Log("Refreshing OAuth token successful", LogLevel.Debug);
         }
 
         private async Task<string> GetLoginCode()
         {
+            bool authenticationError = false;
+            SmartThinqLogger.Log("Getting login code", LogLevel.Debug);
             Dictionary<string, string> queryParams = new Dictionary<string, string>
             {
                 { "country", _country },
@@ -99,7 +110,7 @@ namespace EP94.LgSmartThinq.Clients
             bool hasBrowserRevision = browserFetcher.LocalRevisions().FirstOrDefault((r) => r == BrowserFetcher.DefaultRevision) != default;
             if (!hasBrowserRevision)
             {
-                Console.WriteLine("Downloading browser revision...");
+                SmartThinqLogger.Log("No chromium revision {0} found, downloading...", LogLevel.Debug, BrowserFetcher.DefaultRevision);
                 await browserFetcher.DownloadAsync(BrowserFetcher.DefaultRevision);
             }
             LaunchOptions launchOptions = new LaunchOptions()
@@ -110,7 +121,14 @@ namespace EP94.LgSmartThinq.Clients
             if (_chromiumPath != null)
                 launchOptions.ExecutablePath = _chromiumPath;
             Browser browser = await Puppeteer.LaunchAsync(launchOptions);
+            SmartThinqLogger.Log("Launching browser successful", LogLevel.Debug);
             Page page = await browser.NewPageAsync();
+            page.Dialog += async (sender, args) =>
+            {
+                SmartThinqLogger.Log("Too many failed login attempts, please login at {0} and login yourself and run again", LogLevel.Fatal, loginUrl);
+                authenticationError = true;
+                await args.Dialog.Dismiss();
+            };
             await page.GoToAsync(loginUrl);
             ElementHandle emailIdInput = await page.WaitForSelectorAsync("#user_id");
             ElementHandle passwordInput = await page.WaitForSelectorAsync("#user_pw");
@@ -119,10 +137,42 @@ namespace EP94.LgSmartThinq.Clients
             await passwordInput.FocusAsync();
             await page.Keyboard.TypeAsync(_password);
             await page.ClickAsync("#btn_login");
-            await page.WaitForNavigationAsync();
+            try
+            {
+                await page.WaitForNavigationAsync(new NavigationOptions() { Timeout = 2000 });
+            }
+            catch
+            {
+                SmartThinqLogger.Log("Failed to login", LogLevel.Error);
+                if (page.Url.Contains("changePw"))
+                {
+                    SmartThinqLogger.Log("LG wants you to change your password, please login at {0} and login yourself and run again after changing password", LogLevel.Fatal, loginUrl);
+                }
+                else if (authenticationError)
+                {
+                    return null;
+                }
+                else
+                {
+                    ElementHandle error = null;
+                    try { error = await page.WaitForSelectorAsync("#error_user_pw", new WaitForSelectorOptions() { Timeout = 2000 }); } 
+                    catch
+                    {
+                        SmartThinqLogger.Log("Unexpected error occured, please login at {0} and login yourself and run again", LogLevel.Fatal, loginUrl);
+                        return null;
+                    }
+                    var innerText = (await error.GetPropertyAsync("innerText")).ToString();
+                    string errorMsg = innerText.Replace("JSHandle:", "");
+                    SmartThinqLogger.Log("Authentication error: {0}", LogLevel.Fatal, errorMsg);
+                }
+                await browser.CloseAsync();
+                return null;
+            }
             string responseUrl = page.Url;
             NameValueCollection nameValueCollection = HttpUtility.ParseQueryString(responseUrl);
-            return nameValueCollection.Get("code");
+            string code = nameValueCollection.Get("code");
+            SmartThinqLogger.Log("Received code successful", LogLevel.Debug);
+            return code;
         }
 
         private async Task<OAuthToken> GetOAuthToken(string loginCode)

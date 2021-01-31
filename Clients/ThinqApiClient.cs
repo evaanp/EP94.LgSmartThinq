@@ -16,6 +16,8 @@ namespace EP94.LgSmartThinq.Clients
         private string _baseUrl { get; }
         protected Passport _passport;
         protected OAuthClient _oAuthClient;
+        private DateTime _lastTokenRefresh = DateTime.MinValue;
+        private TimeSpan _maxTokenAge = TimeSpan.FromMinutes(55);
         public ThinqApiClient(Passport passport, string baseUrl, OAuthClient oAuthClient)
         {
             _passport = passport;
@@ -48,6 +50,11 @@ namespace EP94.LgSmartThinq.Clients
 
         protected async Task<bool> ExecuteRequest(HttpRequestMessage httpRequestMessage)
         {
+            if (DateTime.UtcNow - _lastTokenRefresh > _maxTokenAge)
+            {
+                await _oAuthClient.RefreshOAuthToken(_passport);
+                _lastTokenRefresh = DateTime.UtcNow;
+            }
             using HttpClient httpClient = new HttpClient();
             using HttpResponseMessage response = await httpClient.SendAsync(httpRequestMessage);
             string responseString = await response.Content.ReadAsStringAsync();

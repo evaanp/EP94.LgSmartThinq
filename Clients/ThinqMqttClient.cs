@@ -17,6 +17,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Runtime.InteropServices;
 using System.Security.Authentication;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
@@ -26,35 +27,73 @@ using System.Threading.Tasks;
 
 namespace EP94.LgSmartThinq.Clients
 {
-    public delegate void NewDataHandler(Snapshot data);
     public delegate void ErrorHandler(Exception exception);
-    public class ThinqMqttClient
+    public delegate void ConnectionStatusChangeHandler(bool connected);
+    public class ThinqMqttClient : IDisposable
     {
-        public event NewDataHandler OnNewData;
+        internal static ThinqMqttClient GetOrCreate(string brokerAddress, ThinqClient thinqClient)
+        {
+            if (_mqttClient == null)
+                _mqttClient = new ThinqMqttClient(brokerAddress, thinqClient);
+            return _mqttClient;
+        }
+        private static ThinqMqttClient _mqttClient;
+
         public event ErrorHandler OnError;
-        public bool Connected = false;
+        public event ConnectionStatusChangeHandler OnConnectionStatusChange;
+        public bool Connected => _client?.IsConnected ?? false;
         private Uri _brokerUri;
         private ThinqClient _thinqClient;
-        private List<string> _subscriptions;
+        private IMqttClient _client = null;
+        private Dictionary<Device, List<Action<Snapshot>>> _subscriptions = new Dictionary<Device, List<Action<Snapshot>>>();
 
-        internal ThinqMqttClient(string brokerAddress, ThinqClient thinqClient)
+        private ThinqMqttClient(string brokerAddress, ThinqClient thinqClient)
         {
             _brokerUri = new Uri(brokerAddress);
             _thinqClient = thinqClient;
         }
 
-        public async Task Connect(bool autoReconnect = true)
+        public void SubscribeToChanges(Device device, Action<Snapshot> action)
         {
+            if (!_subscriptions.ContainsKey(device))
+                _subscriptions.Add(device, new List<Action<Snapshot>>());
+
+            _subscriptions[device].Add(action);
+        }
+
+        public async Task<bool> Connect(bool autoReconnect = true)
+        {
+            SmartThinqLogger.Log("Start creating MQTT session", LogLevel.Information);
+            if (_client != null && _client.IsConnected)
+            {
+                SmartThinqLogger.Log("Client already connected", LogLevel.Debug);
+                return true;
+            }
             try
             {
                 IotCertificateRegisterResponse registerResponse = await _thinqClient.RegisterIotCertificate(X509CertificateHelpers.CreateCsr(out AsymmetricCipherKeyPair keyPair));
+                SmartThinqLogger.Log("IOT certificate registered", LogLevel.Debug);
                 X509Certificate2 certificate = registerResponse.CertificatePem;
-                RSA rsa = DotNetUtilities.ToRSA((RsaPrivateCrtKeyParameters)keyPair.Private);
+
+                RSA rsa;
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                {
+                    rsa = DotNetUtilities.ToRSA(keyPair.Private as RsaPrivateCrtKeyParameters);
+                }
+                else
+                {
+                    RSAParameters parameters = DotNetUtilities.ToRSAParameters(keyPair.Private as RsaPrivateCrtKeyParameters);
+                    rsa = RSA.Create();
+                    rsa.ImportParameters(parameters);
+                }
+                
                 X509Certificate2 certWithPrivateKey = certificate.CopyWithPrivateKey(rsa);
-                _subscriptions = registerResponse.Subscriptions;
+
+                if (_client != null)
+                    _client.Dispose();
 
                 var factory = new MqttFactory();
-                using IMqttClient client = factory.CreateMqttClient();
+                _client = factory.CreateMqttClient();
                 var clientOptions = new MqttClientOptions
                 {
                     ChannelOptions = new MqttClientTcpOptions
@@ -76,31 +115,62 @@ namespace EP94.LgSmartThinq.Clients
                     },
                     ClientId = Constants.CLIENT_ID
                 };
-                client.ApplicationMessageReceivedHandler = new MqttApplicationMessageReceivedHandlerDelegate(e =>
+                _client.ApplicationMessageReceivedHandler = new MqttApplicationMessageReceivedHandlerDelegate(e =>
                 {
                     string payload = Encoding.UTF8.GetString(e.ApplicationMessage.Payload);
+                    SmartThinqLogger.Log("New MQTT message received: {0}", LogLevel.Verbose, payload);
                     JObject jObject = JsonConvert.DeserializeObject(payload) as JObject;
+                    if (jObject.TryGetValue("controlResult", out JToken value))
+                    {
+                        string returnCode = value["returnCode"].ToObject<string>();
+                        SmartThinqLogger.Log("Error sent by device, code: {0}", LogLevel.Verbose, returnCode);
+                        return;
+                    }
+                    string deviceId = jObject["deviceId"].ToObject<string>();
                     Snapshot snapshot = jObject["data"]["state"]["reported"].ToObject<Snapshot>();
-                    OnNewData?.Invoke(snapshot);
+                    Device device = _subscriptions.Keys.FirstOrDefault(d => d.DeviceId.Equals(deviceId));
+                    if (device != null)
+                    {
+                        SmartThinqLogger.Log("{0} subscribers found for device {1}", LogLevel.Verbose, _subscriptions[device].Count, device);
+                        _subscriptions[device].ForEach(a => a?.Invoke(snapshot));
+                    }
                 });
-                client.ConnectedHandler = new MqttClientConnectedHandlerDelegate(async e =>
+                _client.ConnectedHandler = new MqttClientConnectedHandlerDelegate(async e =>
                 {
-                    Connected = true;
+                    SmartThinqLogger.Log("Connected to MQTT address {0}:{1}", LogLevel.Information, _brokerUri.Host, _brokerUri.Port);
+                    OnConnectionStatusChange?.Invoke(true);
                     foreach (var subscription in registerResponse.Subscriptions)
-                        await client.SubscribeAsync(new MqttTopicFilter() { Topic = subscription });
+                        await _client.SubscribeAsync(new MqttTopicFilter() { Topic = subscription });
                 });
-                client.DisconnectedHandler = new MqttClientDisconnectedHandlerDelegate(async e =>
+                _client.DisconnectedHandler = new MqttClientDisconnectedHandlerDelegate(async e =>
                 {
-                    Connected = false;
+                    SmartThinqLogger.Log("Disconnected to MQTT address {0}:{1}", LogLevel.Information, _brokerUri.Host, _brokerUri.Port);
+                    OnConnectionStatusChange?.Invoke(false);
                     if (autoReconnect)
-                        await client.ConnectAsync(clientOptions);
+                    {
+                        SmartThinqLogger.Log("Reconnecting to MQTT address {0}:{1}...", LogLevel.Information, _brokerUri.Host, _brokerUri.Port);
+                        while (!_client.IsConnected)
+                        {
+                            Thread.Sleep(1000);
+                            await _client.ConnectAsync(clientOptions);
+                        }
+                    }
                 });
-                await client.ConnectAsync(clientOptions);
+                var result = await _client.ConnectAsync(clientOptions);
+                bool success = result.ResultCode == MqttClientConnectResultCode.Success;
+                return success;
             }
             catch (Exception e)
             {
+                SmartThinqLogger.Log("Exception: {0}", LogLevel.Error, e);
                 OnError?.Invoke(e);
+                return false;
             }
+        }
+
+        public void Dispose()
+        {
+            _client.Dispose();
         }
     }
 }
