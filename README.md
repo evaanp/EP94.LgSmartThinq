@@ -8,4 +8,10 @@
  List<Device> devices = await smartThinqClient.GetDevices();
  AcClient acClient = smartThinqClient.GetDeviceClient(devices.First()) as AcClient;
  await acClient.TurnOnAc();
+ var mqttClient = await smartThinqClient.GetMqttClient();
+ await mqttClient.Connect();
+ mqttClient.OnNewData += (snapshot) =>
+ {
+     //...
+ };
 ```
