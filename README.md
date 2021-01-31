@@ -1,5 +1,5 @@
 # EP94.LgSmartThinq
- LG SmartThinq library to communicate to LG devices through the LG api. Library is in a very early stage and only ac is currently supported.
+ LG SmartThinq library to communicate to LG devices through the LG api Note: it is tested with apiv2, not v1. Library is in a very early stage and only ac is currently supported.
  
  Usage:
  ```c#
