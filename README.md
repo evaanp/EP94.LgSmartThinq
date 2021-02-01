@@ -1,6 +1,11 @@
 # EP94.LgSmartThinq
  LG SmartThinq library to communicate to LG devices through the LG api Note: it is tested with apiv2, not v1. Library is in a very early stage and only ac is currently supported.
  
+ Install:
+ ```
+ dotnet add package EP94.LgSmartThinq --version 0.1.1
+ ```
+ 
  Usage:
  ```c#
  SmartThinqLogger.OnNewLogMessage += (message, logLevel, args) =>
