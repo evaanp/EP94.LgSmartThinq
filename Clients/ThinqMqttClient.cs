@@ -31,13 +31,13 @@ namespace EP94.LgSmartThinq.Clients
     public delegate void ConnectionStatusChangeHandler(bool connected);
     public class ThinqMqttClient : IDisposable
     {
-        internal static ThinqMqttClient GetOrCreate(string brokerAddress, ThinqClient thinqClient)
-        {
-            if (_mqttClient == null)
-                _mqttClient = new ThinqMqttClient(brokerAddress, thinqClient);
-            return _mqttClient;
-        }
-        private static ThinqMqttClient _mqttClient;
+        //internal static ThinqMqttClient GetOrCreate(string brokerAddress, ThinqClient thinqClient)
+        //{
+        //    if (_mqttClient == null)
+        //        _mqttClient = new ThinqMqttClient(brokerAddress, thinqClient);
+        //    return _mqttClient;
+        //}
+        //private static ThinqMqttClient _mqttClient;
 
         public event ErrorHandler OnError;
         public event ConnectionStatusChangeHandler OnConnectionStatusChange;
@@ -46,8 +46,10 @@ namespace EP94.LgSmartThinq.Clients
         private ThinqClient _thinqClient;
         private IMqttClient _client = null;
         private Dictionary<Device, List<Action<Snapshot>>> _subscriptions = new Dictionary<Device, List<Action<Snapshot>>>();
+        private int _timeout = 1;
+        private bool _disposed = false;
 
-        private ThinqMqttClient(string brokerAddress, ThinqClient thinqClient)
+        internal ThinqMqttClient(string brokerAddress, ThinqClient thinqClient)
         {
             _brokerUri = new Uri(brokerAddress);
             _thinqClient = thinqClient;
@@ -73,7 +75,7 @@ namespace EP94.LgSmartThinq.Clients
             {
                 IotCertificateRegisterResponse registerResponse = await _thinqClient.RegisterIotCertificate(X509CertificateHelpers.CreateCsr(out AsymmetricCipherKeyPair keyPair));
                 SmartThinqLogger.Log("IOT certificate registered", LogLevel.Debug);
-                X509Certificate2 certificate = registerResponse.CertificatePem;
+                using X509Certificate2 certificate = registerResponse.CertificatePem;
 
                 RSA rsa;
                 if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
@@ -137,6 +139,7 @@ namespace EP94.LgSmartThinq.Clients
                 });
                 _client.ConnectedHandler = new MqttClientConnectedHandlerDelegate(async e =>
                 {
+                    _timeout = 1;
                     SmartThinqLogger.Log("Connected to MQTT address {0}:{1}", LogLevel.Information, _brokerUri.Host, _brokerUri.Port);
                     OnConnectionStatusChange?.Invoke(true);
                     foreach (var subscription in registerResponse.Subscriptions)
@@ -151,8 +154,16 @@ namespace EP94.LgSmartThinq.Clients
                         SmartThinqLogger.Log("Reconnecting to MQTT address {0}:{1}...", LogLevel.Information, _brokerUri.Host, _brokerUri.Port);
                         while (!_client.IsConnected)
                         {
-                            Thread.Sleep(1000);
-                            await _client.ConnectAsync(clientOptions);
+                            _timeout = Math.Min(_timeout * 2, 30);
+                            Thread.Sleep(TimeSpan.FromSeconds(_timeout));
+                            if (!_disposed)
+                            {
+                                await _client.ConnectAsync(clientOptions);
+                            }
+                            else
+                            {
+                                break;
+                            }
                         }
                     }
                 });
@@ -171,6 +182,7 @@ namespace EP94.LgSmartThinq.Clients
         public void Dispose()
         {
             _client.Dispose();
+            _disposed = true;
         }
     }
 }

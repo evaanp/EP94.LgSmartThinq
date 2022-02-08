@@ -1,6 +1,7 @@
 ﻿using EP94.LgSmartThinq.Models;
 using EP94.LgSmartThinq.Utils;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using PuppeteerSharp;
 using System;
 using System.Collections.Generic;
@@ -33,7 +34,7 @@ namespace EP94.LgSmartThinq.Clients
             _chromiumPath = chromiumPath;
         }
 
-        public async Task<Passport> GetPassport()
+        public async Task<Passport> GetPassport(string loginCode)
         {
             string passportPath = 
                 Path.Combine(
@@ -48,7 +49,7 @@ namespace EP94.LgSmartThinq.Clients
             else
             {
                 SmartThinqLogger.Log("Passport not found, creating new", LogLevel.Debug);
-                string loginCode = await GetLoginCode();
+                loginCode = loginCode is null ? await GetLoginCode() : loginCode;
                 if (loginCode == null)
                 {
                     return null;
@@ -103,7 +104,7 @@ namespace EP94.LgSmartThinq.Clients
                 { "state", "asdfasdf" },
                 { "show_thirdparty_login", Constants.THIRD_PARTY_LOGINS }
             };
-            FormUrlEncodedContent formUrlEncoded = new FormUrlEncodedContent(queryParams);
+            using FormUrlEncodedContent formUrlEncoded = new FormUrlEncodedContent(queryParams);
             string urlEncodedString = formUrlEncoded.ReadAsStringAsync().Result;
             string loginUrl = $"{string.Format(Constants.LOGIN_BASE_URL, _country)}/spx/login/signIn?{urlEncodedString}";
             BrowserFetcher browserFetcher = new BrowserFetcher();
@@ -120,9 +121,9 @@ namespace EP94.LgSmartThinq.Clients
             };
             if (_chromiumPath != null)
                 launchOptions.ExecutablePath = _chromiumPath;
-            Browser browser = await Puppeteer.LaunchAsync(launchOptions);
+            using Browser browser = await Puppeteer.LaunchAsync(launchOptions);
             SmartThinqLogger.Log("Launching browser successful", LogLevel.Debug);
-            Page page = await browser.NewPageAsync();
+            using Page page = await browser.NewPageAsync();
             page.Dialog += async (sender, args) =>
             {
                 SmartThinqLogger.Log("Too many failed login attempts, please login at {0} and login yourself and run again", LogLevel.Fatal, loginUrl);
@@ -139,7 +140,7 @@ namespace EP94.LgSmartThinq.Clients
             await page.ClickAsync("#btn_login");
             try
             {
-                await page.WaitForNavigationAsync(new NavigationOptions() { Timeout = 2000 });
+                await page.WaitForNavigationAsync(new NavigationOptions() { Timeout = 30000 });
             }
             catch
             {
@@ -177,7 +178,7 @@ namespace EP94.LgSmartThinq.Clients
 
         private async Task<OAuthToken> GetOAuthToken(string loginCode)
         {
-            HttpClient client = new HttpClient();
+            using HttpClient client = new HttpClient();
             Dictionary<string, string> queryParams = new Dictionary<string, string>();
             queryParams.Add("code", loginCode);
             queryParams.Add("grant_type", "authorization_code");
@@ -194,7 +195,7 @@ namespace EP94.LgSmartThinq.Clients
 
         private async Task<UserProfile> GetUserProfile(OAuthToken token)
         {
-            HttpClient client = new HttpClient();
+            using HttpClient client = new HttpClient();
             Dictionary<string, string> queryParams = new Dictionary<string, string>();
             queryParams.Add("access_code", token.AccessToken);
             FormUrlEncodedContent formUrlEncoded = new FormUrlEncodedContent(queryParams);
@@ -205,7 +206,7 @@ namespace EP94.LgSmartThinq.Clients
             requestMessage.Headers.Add("Authorization", $"Bearer {token.AccessToken}");
             var response = await client.SendAsync(requestMessage);
             string responseString = await response.Content.ReadAsStringAsync();
-            var jsonObject = JsonConvert.DeserializeObject<dynamic>(responseString);
+            var jsonObject = JsonConvert.DeserializeObject<JObject>(responseString);
             UserProfile userProfile = new UserProfile
             {
                 UserNo = (string)jsonObject["account"]["userNo"],

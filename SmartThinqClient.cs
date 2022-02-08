@@ -21,12 +21,12 @@ namespace EP94.LgSmartThinq
         private int _initTimeout = 2000;
         private bool _stopInitializing = false;
 
-        public async Task Initialize(string username, string password, string country, string languageCode, string chromiumPath = null)
+        public async Task Initialize(string username, string password, string country, string languageCode, string chromiumPath = null, string loginCode = null)
         {
             SmartThinqLogger.Log("Initializing...", LogLevel.Information);
             try
             {
-                await DoInitialize(username, password, country, languageCode, chromiumPath);
+                await DoInitialize(username, password, country, languageCode, chromiumPath, loginCode);
             }
             catch (Exception e)
             {
@@ -55,11 +55,11 @@ namespace EP94.LgSmartThinq
             }
         }
 
-        private async Task DoInitialize(string username, string password, string country, string languageCode, string chromiumPath)
+        private async Task DoInitialize(string username, string password, string country, string languageCode, string chromiumPath, string loginCode = null)
         {
             
             _oAuthClient = new OAuthClient(username, password, country, languageCode, chromiumPath);
-            _passport = await _oAuthClient.GetPassport();
+            _passport = await _oAuthClient.GetPassport(loginCode);
             if (_passport == null)
             {
                 _stopInitializing = true;

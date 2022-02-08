@@ -12,13 +12,14 @@ using System.Threading.Tasks;
 
 namespace EP94.LgSmartThinq.Clients
 {
-    public abstract class DeviceClient : ThinqApiClient
+    public abstract class DeviceClient : ThinqApiClient, IDisposable
     {
         private Snapshot _snapshot;
         private Device _device;
         private ThinqClient _thinqClient;
         private IMapper _objectMapper;
         private TypeAccessor _typeAccessor;
+        private ThinqMqttClient _mqttClient;
 
         internal DeviceClient(Passport passport, string baseUrl, Device device, OAuthClient oAuthClient, ThinqClient thinqClient) : base(passport, baseUrl, oAuthClient)
         {
@@ -58,7 +59,7 @@ namespace EP94.LgSmartThinq.Clients
                             desiredValue = Convert.ChangeType(desiredValue, type);
                         }
                         await SendCommand(command, name, desiredValue);
-                        await Task.Delay(500);
+                        await Task.Delay(1000);
                     }
                 }
                 return true;
@@ -74,23 +75,23 @@ namespace EP94.LgSmartThinq.Clients
         {
             CommonClient commonClient = new CommonClient(_passport, Constants.COMMON_BASE_URL, _oAuthClient);
             RouteResponse route = await commonClient.GetRoute();
-            ThinqMqttClient mqttClient = ThinqMqttClient.GetOrCreate(route.MqttServer, _thinqClient);
-            mqttClient.SubscribeToChanges(_device, (snapshot) =>
+            _mqttClient = new ThinqMqttClient(route.MqttServer, _thinqClient);
+            _mqttClient.SubscribeToChanges(_device, (snapshot) =>
             {
                 if (_snapshot == null)
                     _snapshot = snapshot;
                 else
                 {
                     _objectMapper.Map(snapshot, _snapshot);
-                    _snapshot.LastUpdated = DateTime.UtcNow;
+                    //_snapshot.LastUpdated = DateTime.UtcNow;
                 }
             });
-            mqttClient.OnConnectionStatusChange += (connected) =>
+            _mqttClient.OnConnectionStatusChange += (connected) =>
             {
                 if (!connected && _snapshot != null)
                     _snapshot.LastUpdated = DateTime.MinValue;
             };
-            _ = mqttClient.Connect(true);
+            _ = _mqttClient.Connect(true);
         }
 
         protected async Task<bool> SendCommand(string command, string dataKey, object dataValue)
@@ -112,15 +113,24 @@ namespace EP94.LgSmartThinq.Clients
         {
             try
             {
-                if (_snapshot == null || DateTime.UtcNow - _snapshot.LastUpdated > TimeSpan.FromMinutes(5))
+                if (_snapshot == null || DateTime.UtcNow - _snapshot.LastUpdated > TimeSpan.FromSeconds(30))
                 {
                     Snapshot snapshot = await GetFreshSnapshot();
-                    _snapshot = snapshot;
+                    snapshot.LastUpdated = DateTime.UtcNow;
+                    if (_snapshot == null)
+                    {
+                        _snapshot = snapshot;
+                    }
+                    else
+                    {
+                        _objectMapper.Map(snapshot, _snapshot);
+                    }
                 }
                 return _snapshot;
             }
-            catch
+            catch (Exception e)
             {
+                SmartThinqLogger.Log(e.Message, LogLevel.Error);
                 return null;
             }
         }
@@ -130,6 +140,11 @@ namespace EP94.LgSmartThinq.Clients
             using HttpRequestMessage httpRequestMessage = GetHttpRequestMessage(HttpMethod.Get, $"/service/devices/{_device.DeviceId}");
             Device device = await ExecuteRequest<Device>(httpRequestMessage);
             return device.Snapshot;
+        }
+
+        public void Dispose()
+        {
+            _mqttClient?.Dispose();
         }
     }
 }
