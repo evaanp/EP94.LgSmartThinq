@@ -1,7 +1,7 @@
 # EP94.LgSmartThinq
 
 
-Package is depricated, please use https://github.com/evaanp/EP94.ThinqSharp instead.
+Package is deprecated, please use https://github.com/evaanp/EP94.ThinqSharp instead.
 
 
 
